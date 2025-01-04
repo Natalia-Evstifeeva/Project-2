@@ -1,16 +1,17 @@
-#Сложили два ума над этой работой
+#Сложили два ума над этой программкой
 #Не ругайте сильно)
 
 import random
-from colorama import init, Fore
+from colorama import init, Fore# Для окрашивания в красный текста
 import printing_intro# Модуль для вывода intro в начале игры
+import exceptions #Модуль для обработки ошибок
 
 init()# Инициализирую colorama
-print(Fore.RED)# делаю весь текст красным
+print(Fore.RED)# делаем весь текст красным
 
 roles_list = ['Мафия', 'Доктор', 'Комиссар', 'Мирный житель', 'Мирный житель'] #Список ролей
 
-#Писала Полина
+#Писала Полина, исключения добавляли вместе
 #Класс игрок, поля: имя, роль, статус (жив/мертв) изначально жив, цель
 class Player:
     """
@@ -20,6 +21,8 @@ class Player:
         """
         Инициализирует нового игрока.
         """
+        if not isinstance(name, str):# Если переданное имя некорректно
+            raise exceptions.InvalidPlayerNameError(name)
         self.name = name
         self.role = ''
         self.alive = True
@@ -34,7 +37,11 @@ class Mafia(Player):
         """
         Инициализирует Мафию.
         """
+        if not isinstance(name, str):
+            raise exceptions.InvalidPlayerNameError(name)# Если переданное имя некорректно
         super().__init__(name)
+        if not isinstance(players, list) or not all(isinstance(i, Player) for i in players):# Если в список переданы непонятные объекты или передан не список
+            raise TypeError('players должен быть списком объектов класса Player или его дочерних.')
         self.role = 'Мафия'
         self.goal = 'убить всех, кроме себя'
 
@@ -46,8 +53,11 @@ class Mafia(Player):
         Убивает указанного(переданного) игрока.
         """
         player = next((i for i in self.players if i.name == player_to_kill), None)
+        if player is None:
+            raise exceptions.PlayerNotFoundError(player_to_kill)# Игрок не найден
+        if not player.alive:
+            raise exceptions.PlayerAlreadyDeadError(player_to_kill)# Игрок уже мертв(а Цой еще жив))
         player.alive = False
-
 
 
 class Doctor(Player):
@@ -58,6 +68,8 @@ class Doctor(Player):
         """
         Инициализирует Доктора.
         """
+        if not isinstance(name, str):
+            raise exceptions.InvalidPlayerNameError(name)# Если переданное имя некорректно
         super().__init__(name)
         self.role = 'Доктор'
         self.goal = 'предугадывая ходы мафии, лечить мирных жителей, находящихся под угрозой убийства'
@@ -73,6 +85,8 @@ class Detective(Player):
         """
         Инициализирует Комиссара.
         """
+        if not isinstance(name, str):
+            raise exceptions.InvalidPlayerNameError(name)# Если переданное имя некорректно
         super().__init__(name)
         self.role = 'Комиссар'
         self.goal = 'проверяя игроков, найти мафию и указать на нее остальным участникам, не выдав свою роль'
@@ -89,6 +103,8 @@ class Civilian(Player):
         """
         Инициализирует Мирного жителя.
         """
+        if not isinstance(name, str):
+            raise exceptions.InvalidPlayerNameError(name)# Если переданное имя некорректно
         super().__init__(name)
         self.role = 'Мирный житель'
         self.goal = 'вычислить мафию, выжить'
@@ -102,7 +118,12 @@ class Game:
         """
         Инициализирует игру, в нашем случае game1.
         """
-        self.players = []  # Список всех игроков
+        if not isinstance(roles_list, list):# Если передан не список
+            raise TypeError('roles_list должен быть списком')
+        for i in roles_list:
+            if i not in ['Мафия', 'Доктор', 'Комиссар', 'Мирный житель']:
+                raise exceptions.InvalidRoleError(i)# Некорректная роль (такой роли не может быть в списке)
+        self.players = [] # Список всех игроков
         self.in_game_players = [] # Список игроков со статусом alive = True
         self.roles_list = roles_list.copy()
         self.user_role = None
@@ -163,6 +184,8 @@ class Game:
         """
         Выводит игроков, которых пользователь может выбрать для дальнейших манипуляций.
         """
+        if not isinstance(skip_Player_1, bool):
+            raise TypeError('skip_Player_1 должно принимать значение True или False') # Проверка на корректный тип данных
         for i in self.players:
             if i.alive:
                 if skip_Player_1 and i.name != 'Игрок 1':
@@ -173,8 +196,10 @@ class Game:
     #Писала Полина
     def player_chooser(self, player_not_to_choose):
         """
-        Выбирает и возвращает из списка рандомного игрока, не учитывая игрока переданного как аргумент.
+        Выбирает и возвращает из списка рандомного игрока, не учитывая игрока переданного как аргумент
         """
+        if not isinstance(player_not_to_choose, str):
+            raise TypeError('player_not_to_choose должно принимать значение типа str') # Проверка на корректный тип данных
         tmp_list_of_players = self.players.copy()
         tmp_list_of_players = [i for i in tmp_list_of_players if i.name != player_not_to_choose]
         return (random.choice(tmp_list_of_players)).name
@@ -195,10 +220,21 @@ class Game:
         print('Город засыпает\nПросыпается Мафия, решает кого убить')
 
         # Обрабатываю роль мафии
-        if self.user_role.role == 'Мафия':
+        if self.user_role.role == 'Мафия' and self.user_role.alive:
             print('Ваши варианты:')
             self.print_players_for_choosing(False)
-            self.mafia.player_to_kill = input('Введите имя игрока, которого вы хотите убить: ')
+
+            while True:
+                try:
+                    self.mafia.player_to_kill = input('Введите имя игрока, которого вы хотите убить: ')
+                    if not self.mafia.player_to_kill:
+                        raise ValueError("Имя игрока не может быть пустым.")
+                    if not any(i.name == self.mafia.player_to_kill for i in self.in_game_players):
+                        raise ValueError(f"Игрока с именем '{self.mafia.player_to_kill}' не существует.")
+                    break
+                except ValueError as e:
+                    print(f"Ошибка: {e}. Пожалуйста, попробуйте еще раз.")
+
         else: # это рандомный выбор игрока для убийства, если роль юзера не Мафия
             self.mafia.player_to_kill = self.player_chooser('')
 
@@ -207,7 +243,7 @@ class Game:
 
         # Обрабатываю роль доктора
         print('\nПросыпается доктор, решает кого исцелить')
-        if self.user_role.role == 'Доктор':
+        if self.user_role.role == 'Доктор' and self.user_role.alive:
             print('Ваши варианты:')
             if self.doctor.can_heal_myself:
                 self.print_players_for_choosing(False)
@@ -215,7 +251,17 @@ class Game:
             else:
                 self.print_players_for_choosing(True)
 
-            self.doctor.player_to_heal = input('Введите имя игрока, которого вы хотите исцелить: ')
+            while True:
+                try:
+                    self.doctor.player_to_heal = input('Введите имя игрока, которого вы хотите исцелить: ')
+                    if not self.doctor.player_to_heal:
+                        raise ValueError("Имя игрока не может быть пустым")
+                    if not any(i.name == self.doctor.player_to_heal for i in self.in_game_players):
+                        raise ValueError(f"Игрока с именем '{ self.doctor.player_to_heal}' не существует")
+                    break
+                except ValueError as e:
+                    print(f"Ошибка: {e}. Пожалуйста, попробуйте еще раз.")
+
         else:  # это рандомный выбор игрока для исцеления, если роль юзера не Доктор
             if self.doctor.can_heal_myself:
                 self.doctor.player_to_heal = self.player_chooser('')
@@ -228,11 +274,20 @@ class Game:
 
         # Обрабатываю роль Комиссара
         print('\nПросыпается комиссара, решает кого проверить')
-        if self.user_role.role == 'Комиссар':
+        if self.user_role.role == 'Комиссар' and self.user_role.alive:
             print('Ваши варианты:')
             self.print_players_for_choosing(True)
 
-            self.detective.player_to_check = input('Введите имя игрока, которого вы хотите проверить: ')
+            while True:
+                try:
+                    self.detective.player_to_check = input('Введите имя игрока, которого вы хотите проверить: ')
+                    if not self.detective.player_to_check:
+                        raise ValueError("Имя игрока не может быть пустым")
+                    if not any(i.name == self.detective.player_to_check for i in self.in_game_players):
+                        raise ValueError(f"Игрока с именем '{self.detective.player_to_check}' не существует")
+                    break
+                except ValueError as e:
+                    print(f"Ошибка: {e}. Пожалуйста, попробуйте еще раз.")
             the_one_to_check = next((i for i in self.players if i.name == self.detective.player_to_check), None)
 
         else:  # это рандомный выбор игрока для проверки, если роль юзера не Комиссар
@@ -272,10 +327,22 @@ class Game:
         """
         self.find_players_in_game()# Удаляем из списка in_game_players игроков, которые ум$рли
         print('\nПроведем голосование')
+        cur_player_while_choosing = ''
         if self.players[0].alive:
             print('Ваши варианты:')
             self.print_players_for_choosing(False)
-            self.players_chosen_during_voting.append(input('Введите имя игрока, которого вы считаете мафией: '))
+            while True:
+                try:
+                    cur_player_while_choosing = input('Введите имя игрока, которого вы считаете мафией: ')
+                    if not cur_player_while_choosing:
+                        raise ValueError("Имя игрока не может быть пустым")
+                    if not any(i.name == cur_player_while_choosing for i in self.in_game_players):
+                        raise ValueError(f"Игрока с именем '{cur_player_while_choosing}' не существует")
+                    break
+                except ValueError as e:
+                    print(f"Ошибка: {e} Пожалуйста, попробуйте еще раз.")
+
+            self.players_chosen_during_voting.append(cur_player_while_choosing)
             for i in self.in_game_players[1:]: #обрезаем первого игрока тк он уже проголосовал
                 self.players_chosen_during_voting.append(random.choice(self.in_game_players).name)
         else: #голосуют все, кто жив
@@ -296,14 +363,14 @@ game1 = Game(roles_list)
 game1.randomize_players()
 game1.print_all_intro()
 # Фазы игры
-while game1.user_role.alive and game1.mafia.alive and len(game1.in_game_players) > 2:
+while game1.mafia.alive and len(game1.in_game_players) > 2:
     game1.night()
     print('\nПросыпается город')
     game1.putting_decisions_to_reality_phase()
     if game1.user_role.alive and game1.mafia.alive and len(game1.in_game_players) > 2:
         game1.voting_phase()
 print('Игра окончена!')
-if game1.mafia.alive:
+if game1.mafia.alive and len(game1.in_game_players) <= 2:
     print('Мафия победила!')
 else:
     print('Мирные жители победили!')
